@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Consulta de Patentes, Nombres y Registro de Visitas</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        input, button {
+            padding: 10px;
+            font-size: 16px;
+            margin: 5px;
+        }
+        #resultado, #formulario, #registroVisitas {
+            margin-top: 20px;
+            font-size: 18px;
+        }
+        .error {
+            color: red;
+        }
+        .success {
+            color: green;
+        }
+        .resultado-item, .registro-item {
+            margin-top: 20px;
+            border: 1px solid #ddd;
+            padding: 10px;
+            border-radius: 5px;
+        }
+        .resultado-item img, .registro-item img {
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+        }
+        .resultado-item button {
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Consulta de Patentes, Nombres y Registro de Visitas</h1>
+
+    <!-- Sección de consulta -->
+    <h2>Consulta de Patentes y Nombres</h2>
+    <p>Ingresa una patente o un nombre para buscar información:</p>
+    <input type="text" id="consultaInput" placeholder="Ej: ABC123 o Josué" />
+    <button onclick="buscarInformacion()">Buscar</button>
+    <div id="resultado"></div>
+
+    <!-- Sección de registrar entrada/salida -->
+    <h2>Registrar Entrada/Salida</h2>
+    <div id="formularioVisitas">
+        <input type="text" id="patenteRegistro" placeholder="Patente" />
+        <input type="text" id="nombreDescripcionRegistro" placeholder="Nombre/Descripción" />
+        <button onclick="registrarEntrada()">Registrar Entrada</button>
+        <button onclick="registrarSalida()">Registrar Salida</button>
+    </div>
+    <div id="mensajeRegistro"></div>
+
+    <h2>Registros de Visitas</h2>
+    <div id="registroVisitas"></div>
+    <button onclick="guardarPDF()">Guardar como PDF</button>
+
+    <!-- Sección de agregar nueva información -->
+    <h2>Agregar Nueva Información</h2>
+    <div id="formulario">
+        <input type="text" id="nuevoNombre" placeholder="Nombre Completo" />
+        <input type="text" id="nuevaPatente" placeholder="Patente" />
+        <input type="text" id="nuevaUnidad" placeholder="Unidad Funcional" />
+        <input type="text" id="nuevaDireccion" placeholder="Dirección" />
+        <input type="text" id="nuevoTelefono" placeholder="Teléfono" />
+        <input type="text" id="nuevoCorreo" placeholder="Correo Electrónico" />
+        <input type="text" id="nuevaFoto" placeholder="URL Foto" />
+        <button onclick="agregarDatos()">Agregar</button>
+    </div>
+    <div id="mensaje"></div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+    <script>
+        // Base de datos de patentes y nombres
+        let baseDeDatos = JSON.parse(localStorage.getItem("baseDeDatos")) || [
+            {
+                patente: "ABC123",
+                nombre: "Juan Pérez",
+                unidadFuncional: "101",
+                telefono: "555-1234",
+                correo: "juan.perez@example.com",
+                foto: "https://via.placeholder.com/100"
+            },
+            {
+                patente: "XYZ789",
+                nombre: "María Gómez",
+                unidadFuncional: "202",
+                direccion: "Avenida Secundaria 456",
+                telefono: "555-5678",
+                correo: "maria.gomez@example.com",
+                foto: "https://via.placeholder.com/100"
+            }
+        ];
+
+        // Base de datos de registros de visitas
+        let registrosVisitas = JSON.parse(localStorage.getItem("registrosVisitas")) || [];
+
+        function normalizarTexto(texto) {
+            return texto
+                .toLowerCase()
+                .normalize("NFD")
+                .replace(/\p{Diacritic}/gu, "");
+        }
+
+        // Función para buscar patentes o nombres
+        function buscarInformacion() {
+            const input = normalizarTexto(document.getElementById("consultaInput").value.trim());
+            const resultadoDiv = document.getElementById("resultado");
+            resultadoDiv.innerHTML = "";
+
+            const resultados = baseDeDatos.filter(item => {
+                return (
+                    (item.patente && normalizarTexto(item.patente).includes(input)) ||
+                    (item.nombre && normalizarTexto(item.nombre).includes(input))
+                );
+            });
+
+            if (resultados.length > 0) {
+                resultados.forEach(registro => {
+                    resultadoDiv.innerHTML += `
+                        <div class="resultado-item">
+                            <img src="${registro.foto}" alt="Foto de ${registro.nombre}" />
+                            <p><strong>Nombre:</strong> ${registro.nombre}</p>
+                            <p><strong>Patente:</strong> ${registro.patente}</p>
+                            <p><strong>Unidad Funcional:</strong> ${registro.unidadFuncional}</p>
+                            <p><strong>Dirección:</strong> ${registro.direccion}</p>
+                            <p><strong>Teléfono:</strong> ${registro.telefono}</p>
+                            <p><strong>Correo Electrónico:</strong> ${registro.correo}</p>
+                            <button onclick="registrarEntradaPorPatente('${registro.patente}')">Registrar Entrada</button>
+                            <button onclick="registrarSalidaPorPatente('${registro.patente}')">Registrar Salida</button>
+                        </div>
+                    `;
+                });
+            } else {
+                resultadoDiv.innerHTML = `<p class="error">No se encontró información para la consulta ingresada.</p>`;
+            }
+        }
+
+        // Función para registrar entrada por patente
+        function registrarEntradaPorPatente(patente) {
+            const nombreDescripcion = prompt("Ingrese el nombre o descripción para la entrada:");
+            if (nombreDescripcion) {
+                const fechaHora = new Date();
+                const fecha = fechaHora.toLocaleDateString();
+                const hora = fechaHora.toLocaleTimeString();
+
+                const nuevaEntrada = {
+                    patente: patente,
+                    nombreDescripcion: nombreDescripcion,
+                    fechaEntrada: fecha,
+                    horaEntrada: hora,
+                    horaSalida: null
+                };
+
+                registrosVisitas.push(nuevaEntrada);
+                localStorage.setItem("registrosVisitas", JSON.stringify(registrosVisitas));
+
+                alert("Entrada registrada correctamente.");
+                mostrarRegistros();
+            }
+        }
+
+        // Función para registrar salida por patente
+        function registrarSalidaPorPatente(patente) {
+            const registro = registrosVisitas.find(
+                reg => reg.patente === patente && !reg.horaSalida
+            );
+
+            if (registro) {
+                const fechaHora = new Date();
+                const horaSalida = fechaHora.toLocaleTimeString();
+
+                registro.horaSalida = horaSalida;
+                localStorage.setItem("registrosVisitas", JSON.stringify(registrosVisitas));
+
+                alert("Salida registrada correctamente.");
+                mostrarRegistros();
+            } else {
+                alert("No se encontró un registro de entrada sin salida para esta patente.");
+            }
+        }
+
+        // Función para mostrar los registros de visitas
+        function mostrarRegistros() {
+            const registroDiv = document.getElementById("registroVisitas");
+            registroDiv.innerHTML = "";
+
+            if (registrosVisitas.length > 0) {
+                registrosVisitas.forEach((registro, index) => {
+                    registroDiv.innerHTML += `
+                        <div class="registro-item">
+                            <p><strong>#${index + 1}</strong></p>
+                            <p><strong>Patente:</strong> ${registro.patente}</p>
+                            <p><strong>Nombre/Descripción:</strong> ${registro.nombreDescripcion}</p>
+                            <p><strong>Fecha de Entrada:</strong> ${registro.fechaEntrada}</p>
+                            <p><strong>Hora de Entrada:</strong> ${registro.horaEntrada}</p>
+                            <p><strong>Hora de Salida:</strong> ${registro.horaSalida || "No registrada"}</p>
+                        </div>
+                    `;
+                });
+            } else {
+                registroDiv.innerHTML = `<p>No hay registros almacenados.</p>`;
+            }
+        }
+
+        // Función para guardar los registros como PDF
+        function guardarPDF() {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            doc.setFont("Helvetica", "normal");
+            doc.setFontSize(12);
+            let y = 20;
+
+            doc.text("Registros de Visitas", 20, y);
+            y += 10;
+
+            if (registrosVisitas.length > 0) {
+                registrosVisitas.forEach((registro, index) => {
+                    doc.text(`#${index + 1}: ${registro.patente} - ${registro.nombreDescripcion}`, 20, y);
+                    y += 10;
+                    doc.text(`Fecha Entrada: ${registro.fechaEntrada} - Hora Entrada: ${registro.horaEntrada}`, 20, y);
+                    y += 10;
+                    doc.text(`Hora Salida: ${registro.horaSalida || "No registrada"}`, 20, y);
+                    y += 15;
+                });
+                doc.save('registros_visitas.pdf');
+            } else {
+                doc.text("No hay registros almacenados.", 20, y);
+                doc.save('registros_visitas.pdf');
+            }
+        }
+
+        // Mostrar registros al cargar la página
+        mostrarRegistros();
+    </script>
+</body>
+</html>
